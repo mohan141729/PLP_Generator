@@ -1,10 +1,10 @@
-# Trae - Personalized Learning Path Generator
+#  Personalized Learning Path Generator
 
-Trae is a full-stack web application that helps users create personalized learning paths for any topic using AI. The application consists of a React frontend and a Node.js backend.
+PLP generator is a full-stack web application that helps users create personalized learning paths for any topic using AI. The application consists of a React frontend and a Node.js backend.
 
 ## Project Overview
 
-Trae uses the Google Gemini API to generate comprehensive, multi-level learning paths tailored to users' needs. Each learning path includes:
+PLP Generator uses the Google Gemini API to generate comprehensive, multi-level learning paths tailored to users' needs. Each learning path includes:
 - Beginner, Intermediate, and Advanced levels
 - Curated modules with learning resources
 - Practical projects
