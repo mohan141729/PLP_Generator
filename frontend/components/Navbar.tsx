@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 
 interface NavbarProps {
   currentView: string;
@@ -26,7 +25,6 @@ const ChartBarIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
-
 export const Navbar: React.FC<NavbarProps> = ({ navigateTo, isAuthenticated, onLogout, currentView }) => {
   const [darkMode, setDarkMode] = React.useState(() => {
     if (typeof window !== 'undefined') {
@@ -35,6 +33,8 @@ export const Navbar: React.FC<NavbarProps> = ({ navigateTo, isAuthenticated, onL
     }
     return false;
   });
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   React.useEffect(() => {
     if (darkMode) {
@@ -49,6 +49,10 @@ export const Navbar: React.FC<NavbarProps> = ({ navigateTo, isAuthenticated, onL
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
   };
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
   
   const navButtonBaseClass = "px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-[#064df1] dark:focus:ring-offset-[#064df1]";
 
@@ -59,76 +63,134 @@ export const Navbar: React.FC<NavbarProps> = ({ navigateTo, isAuthenticated, onL
         : 'text-primary-200 dark:text-primary-200 hover:bg-white/10 dark:hover:bg-white/10 hover:text-white dark:hover:text-white'
     }`;
 
+  const renderNavItems = () => (
+    <>
+      {isAuthenticated ? (
+        <>
+          <button
+            onClick={() => {
+              navigateTo('dashboard');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`${navLinkClass('dashboard')} w-full sm:w-auto text-left`}
+            aria-current={currentView === 'dashboard' ? 'page' : undefined}
+          >
+            Dashboard
+          </button>
+          <button
+            onClick={() => {
+              navigateTo('create');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`${navLinkClass('create')} w-full sm:w-auto text-left`}
+            aria-current={currentView === 'create' ? 'page' : undefined}
+          >
+            Create New
+          </button>
+          <button
+            onClick={() => {
+              navigateTo('metrics');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`${navLinkClass('metrics')} flex items-center w-full sm:w-auto text-left`}
+            aria-current={currentView === 'metrics' ? 'page' : undefined}
+          >
+            <ChartBarIcon className="w-4 h-4 mr-1.5" />
+            Metrics
+          </button>
+          <button
+            onClick={() => {
+              onLogout();
+              setIsMobileMenuOpen(false);
+            }}
+            className={`${navButtonBaseClass} text-white bg-secondary-500 hover:bg-secondary-600 dark:bg-secondary-600 dark:hover:bg-secondary-700 focus:ring-secondary-500 w-full sm:w-auto text-left`}
+          >
+            Logout
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            onClick={() => {
+              navigateTo('login', { mode: 'login' });
+              setIsMobileMenuOpen(false);
+            }}
+            className={`${navButtonBaseClass} text-primary-200 dark:text-primary-200 hover:bg-white/10 dark:hover:bg-white/10 hover:text-white dark:hover:text-white w-full sm:w-auto text-left`}
+          >
+            Login
+          </button>
+          <button
+            onClick={() => {
+              navigateTo('login', { mode: 'register' });
+              setIsMobileMenuOpen(false);
+            }}
+            className={`${navButtonBaseClass} text-white bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 focus:ring-primary-500 w-full sm:w-auto text-left`}
+          >
+            Sign Up
+          </button>
+        </>
+      )}
+      <button
+        onClick={toggleDarkMode}
+        className={`${navButtonBaseClass} text-primary-200 dark:text-primary-200 hover:bg-white/10 dark:hover:bg-white/10 hover:text-white dark:hover:text-white w-full sm:w-auto text-left`}
+        aria-label="Toggle dark mode"
+      >
+        {darkMode ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+      </button>
+    </>
+  );
 
   return (
     <nav className="bg-gradient-to-br from-primary-600/70 to-[#064df1]/70 dark:from-primary-700/80 dark:to-[#064df1]/80 backdrop-blur-xl sticky top-0 z-50 border-b border-[#064df1]/40 dark:border-[#064df1]/50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-             <button onClick={() => navigateTo(isAuthenticated ? 'dashboard' : 'landing')} className={`flex items-center focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-[#064df1] dark:focus:ring-offset-[#064df1] rounded-lg p-1 -ml-1`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-primary-100 dark:text-primary-200">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
-                </svg>
-                <span className="ml-2 font-semibold text-xl text-white tracking-tight">
-                  LearnPath AI
-                </span>
+            <button 
+              onClick={() => {
+                navigateTo(isAuthenticated ? 'dashboard' : 'landing');
+                setIsMobileMenuOpen(false);
+              }} 
+              className="flex items-center focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-[#064df1] dark:focus:ring-offset-[#064df1] rounded-lg p-1 -ml-1"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-primary-100 dark:text-primary-200">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+              </svg>
+              <span className="ml-2 font-semibold text-xl text-white tracking-tight">
+                LearnPath AI
+              </span>
             </button>
           </div>
-          <div className="flex items-center space-x-1 sm:space-x-2">
-            {isAuthenticated ? (
-              <>
-                <button
-                  onClick={() => navigateTo('dashboard')}
-                  className={navLinkClass('dashboard')}
-                  aria-current={currentView === 'dashboard' ? 'page' : undefined}
-                >
-                  Dashboard
-                </button>
-                <button
-                  onClick={() => navigateTo('create')}
-                  className={navLinkClass('create')}
-                  aria-current={currentView === 'create' ? 'page' : undefined}
-                >
-                  Create New
-                </button>
-                 <button
-                  onClick={() => navigateTo('metrics')}
-                  className={`${navLinkClass('metrics')} flex items-center`}
-                  aria-current={currentView === 'metrics' ? 'page' : undefined}
-                >
-                  <ChartBarIcon className="w-4 h-4 mr-1.5" />
-                  Metrics
-                </button>
-                <button
-                  onClick={onLogout}
-                  className={`${navButtonBaseClass} text-white bg-secondary-500 hover:bg-secondary-600 dark:bg-secondary-600 dark:hover:bg-secondary-700 focus:ring-secondary-500`}
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => navigateTo('login', { mode: 'login' })}
-                  className={`${navButtonBaseClass} text-primary-200 dark:text-primary-200 hover:bg-white/10 dark:hover:bg-white/10 hover:text-white dark:hover:text-white`}
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => navigateTo('login', { mode: 'register' })}
-                  className={`${navButtonBaseClass} text-white bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 focus:ring-primary-500`}
-                >
-                  Sign Up
-                </button>
-              </>
-            )}
+
+          {/* Mobile menu button */}
+          <div className="sm:hidden">
             <button
-              onClick={toggleDarkMode}
-              className={`${navButtonBaseClass} text-primary-200 dark:text-primary-200 hover:bg-white/10 dark:hover:bg-white/10 hover:text-white dark:hover:text-white`}
-              aria-label="Toggle dark mode"
+              onClick={toggleMobileMenu}
+              className="inline-flex items-center justify-center p-2 rounded-md text-primary-200 hover:text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
+              aria-expanded={isMobileMenuOpen}
             >
-              {darkMode ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+              <span className="sr-only">Open main menu</span>
+              {isMobileMenuOpen ? (
+                <svg className="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
             </button>
+          </div>
+
+          {/* Desktop menu */}
+          <div className="hidden sm:flex sm:items-center sm:space-x-1 sm:space-x-2">
+            {renderNavItems()}
+          </div>
+        </div>
+
+        {/* Mobile menu */}
+        <div className={`${isMobileMenuOpen ? 'block' : 'hidden'} sm:hidden`}>
+          <div className="px-2 pt-2 pb-3 space-y-1">
+            {renderNavItems()}
           </div>
         </div>
       </div>
