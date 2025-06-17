@@ -1,13 +1,12 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { GEMINI_API_MODEL_TEXT, MODULE_COUNT_PER_LEVEL } from '../constants';
 import { GeminiLearningPathResponse, LearningPath, Level, Module, Project, GeminiLevelResponse, GeminiModuleResponse, GeminiProjectResponse } from '../types';
 
-const API_KEY = process.env.API_KEY;
+const API_KEY = import.meta.env.VITE_API_KEY;
 
 if (!API_KEY) {
   // This check is mostly for local dev. In AI Studio, it's expected to be set.
-  console.warn("API_KEY environment variable not found. Gemini API calls will fail.");
+  console.warn("VITE_API_KEY environment variable not found. Gemini API calls will fail.");
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY || "MISSING_API_KEY" }); // Provide a fallback for type safety if needed, though it will fail.
@@ -80,7 +79,7 @@ Please provide the output STRICTLY in the following JSON format. Do not include 
 
 export const generateLearningPath = async (topic: string): Promise<Omit<LearningPath, 'id' | 'createdAt'>> => {
   if (!API_KEY) {
-    throw new Error("Gemini API Key is not configured. Please set the API_KEY environment variable.");
+    throw new Error("Gemini API Key is not configured. Please set the VITE_API_KEY environment variable.");
   }
 
   const prompt = constructPrompt(topic);
@@ -95,7 +94,11 @@ export const generateLearningPath = async (topic: string): Promise<Omit<Learning
       }
     });
     
-    let jsonStr = response.text.trim();
+    let jsonStr = response.text?.trim() || '';
+    
+    if (!jsonStr) {
+      throw new Error("Empty response received from Gemini API.");
+    }
     
     // Remove markdown fences if present (Gemini might still wrap it sometimes)
     const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;

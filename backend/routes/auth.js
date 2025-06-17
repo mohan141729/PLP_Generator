@@ -4,10 +4,9 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 
-// Middleware to authenticate JWT token
+// Middleware to authenticate JWT token from cookies
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = req.cookies.jwt;
 
   if (!token) {
     return res.status(401).json({ error: 'Access denied' });
@@ -58,8 +57,15 @@ router.post('/register', async (req, res) => {
             { expiresIn: '24h' }
           );
 
+          // Set JWT as HTTP-only cookie
+          res.cookie('jwt', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // Only use secure in production
+            sameSite: 'strict',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+          });
+
           res.status(201).json({
-            token,
             user: { id: this.lastID, email }
           });
         }
@@ -96,14 +102,33 @@ router.post('/login', async (req, res) => {
         { expiresIn: '24h' }
       );
 
+      // Set JWT as HTTP-only cookie
+      res.cookie('jwt', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Only use secure in production
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      });
+
       res.json({
-        token,
         user: { id: user.id, email: user.email }
       });
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
+});
+
+// Logout user
+router.post('/logout', (req, res) => {
+  // Clear the JWT cookie
+  res.clearCookie('jwt', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+  
+  res.json({ message: 'Logged out successfully' });
 });
 
 // Get current user

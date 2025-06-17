@@ -1,7 +1,9 @@
 import React from 'react';
 
+type View = 'landing' | 'login' | 'dashboard' | 'create' | 'metrics';
+
 interface LandingPageProps {
-  onNavigate: (view: string) => void;
+  onNavigate: (view: View, params?: { mode?: 'login' | 'register' }) => void;
 }
 
 // Icons (using Heroicons v2 for consistency)

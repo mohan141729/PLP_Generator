@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { LearningPath, Level, Module, Project } from '../types';
 import { ModuleCard } from './ModuleCard';
@@ -98,7 +97,7 @@ const LearningPathDisplay: React.FC<LearningPathDisplayProps> = ({ path, onSaveP
 
       const addTextWithWrapAndPageBreak = (text: string, x: number, currentY: number, fontSize: number, fontStyle: 'normal' | 'bold', customLineHeight?: number, textColor: string = "#000000") => {
         pdf.setFontSize(fontSize);
-        pdf.setFont(undefined, fontStyle);
+        pdf.setFont('helvetica', fontStyle);
         pdf.setTextColor(textColor);
         
         const lines = pdf.splitTextToSize(text, maxLineWidth - (x - margin)); 
@@ -223,7 +222,10 @@ const LearningPathDisplay: React.FC<LearningPathDisplayProps> = ({ path, onSaveP
             </button>
             {onSavePath && ( 
               <button
-                onClick={() => onSavePath(path)}
+                onClick={() => {
+                  console.log('Save button clicked for path:', path);
+                  onSavePath(path);
+                }}
                 className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600 dark:focus:ring-offset-gray-800"
               >
                 Save Path

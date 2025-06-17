@@ -2,37 +2,19 @@ import axios from 'axios';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: 'https://plp-generator.onrender.com/api', // Backend server URL
+  baseURL: 'http://localhost:5000/api', // Backend server URL
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true // Enable cookies to be sent with requests
 });
-
-// Request interceptor for adding auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
 
 // Response interceptor for handling common errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
-      // Handle 401 Unauthorized
-      if (error.response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-      }
+      // Don't automatically redirect on 401 - let components handle it
       console.error('API Error:', error.response.data);
       throw new Error(error.response.data.message || 'An error occurred');
     } else if (error.request) {
@@ -50,10 +32,7 @@ export const authService = {
   async register(email: string, password: string) {
     try {
       const response = await api.post('/auth/register', { email, password });
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      return user;
+      return response.data.user;
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(error.message);
@@ -65,10 +44,7 @@ export const authService = {
   async login(email: string, password: string) {
     try {
       const response = await api.post('/auth/login', { email, password });
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      return user;
+      return response.data.user;
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(error.message);
@@ -86,9 +62,12 @@ export const authService = {
     }
   },
 
-  logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  async logout() {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   }
 };
 
@@ -120,6 +99,18 @@ export const learningPathService = {
 export const userMetricsService = {
   getMetrics: () => 
     api.get('/user-metrics'),
+  
+  recalculateMetrics: () => 
+    api.post('/user-metrics/recalculate'),
+  
+  getDetailedMetrics: () => 
+    api.get('/user-metrics/detailed'),
+  
+  getActivityHistory: (limit?: number) => 
+    api.get(`/user-metrics/activity${limit ? `?limit=${limit}` : ''}`),
+  
+  getPathMetrics: () => 
+    api.get('/user-metrics/paths'),
 };
 
 // Test endpoint

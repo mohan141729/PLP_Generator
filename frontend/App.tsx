@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LearningPath, LearningPathCreationRequest, User, Module, UserMetrics, Project, Level } from './types';
+import { LearningPath, LearningPathCreationRequest, User, Module, Project, Level, normalizeBackendData } from './types';
 import LearningPathForm from './components/LearningPathForm';
 import LearningPathDisplay from './components/LearningPathDisplay';
 import Dashboard from './components/Dashboard';
+import UserMetricsPage from './components/UserMetricsPage';
 import { generateLearningPath as fetchLearningPathFromAPI } from './services/geminiService';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { Navbar } from './components/Navbar';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage'; 
 import * as authService from './services/authService';
-import UserMetricsPage from './components/UserMetricsPage';
 
 type View = 'landing' | 'login' | 'dashboard' | 'create' | 'viewing' | 'metrics';
 
@@ -22,15 +22,15 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [intendedView, setIntendedView] = useState<View | null>(null);
-  const [userMetrics, setUserMetrics] = useState<UserMetrics | null>(null);
   const [authPageMode, setAuthPageMode] = useState<'login' | 'register'>('login');
-
+  const [metricsRefreshTrigger, setMetricsRefreshTrigger] = useState<number>(0);
 
   const calculateAndSetUserMetrics = useCallback((paths: LearningPath[]) => {
+    // Only calculate metrics if user is authenticated
     if (!isAuthenticated || !currentUser) {
-      setUserMetrics(null);
       return;
     }
+    
     let totalModules = 0;
     let completedModules = 0;
     let completedPaths = 0;
@@ -38,16 +38,23 @@ const App: React.FC = () => {
     paths.forEach(path => {
       let pathModules = 0;
       let pathCompletedModules = 0;
-      path.levels.forEach(level => {
-        level.modules.forEach(module => {
-          totalModules++;
-          pathModules++;
-          if (module.isCompleted) {
-            completedModules++;
-            pathCompletedModules++;
+      
+      // Check if path has levels property and it's an array
+      if (path.levels && Array.isArray(path.levels)) {
+        path.levels.forEach(level => {
+          if (level.modules && Array.isArray(level.modules)) {
+            level.modules.forEach(module => {
+              totalModules++;
+              pathModules++;
+              if (module.isCompleted) {
+                completedModules++;
+                pathCompletedModules++;
+              }
+            });
           }
         });
-      });
+      }
+      
       if (pathModules > 0 && pathModules === pathCompletedModules) {
         completedPaths++;
       }
@@ -55,104 +62,67 @@ const App: React.FC = () => {
 
     const averageCompletionRate = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
 
-    setUserMetrics({
-      totalPaths: paths.length,
-      completedPaths,
-      totalModules,
-      completedModules,
-      averageCompletionRate,
-    });
-  }, [isAuthenticated, currentUser]);
+    // This function is now empty as the metrics are no longer stored in the component state
+  }, []); // Removed isAuthenticated and currentUser dependencies
 
+  // Check authentication status on app mount
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('token');
-      const savedUser = localStorage.getItem('user');
-      
-      if (token && savedUser) {
-        try {
-          setIsLoading(true);
-          const user = await authService.getCurrentUser();
+      try {
+        setIsLoading(true);
+        const user = await authService.getCurrentUser();
+        if (user) {
           setIsAuthenticated(true);
           setCurrentUser(user);
           setCurrentView('dashboard');
-        } catch (error) {
-          console.error("Auth check failed:", error);
-          authService.logout();
+        } else {
           setIsAuthenticated(false);
           setCurrentUser(null);
           setCurrentView('landing');
-        } finally {
-          setIsLoading(false);
         }
-      } else {
+      } catch (error) {
+        console.error("Auth check failed:", error);
         setIsAuthenticated(false);
         setCurrentUser(null);
         setCurrentView('landing');
+      } finally {
+        setIsLoading(false);
       }
     };
     checkAuth();
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, []); // Empty dependency array - only run once on mount
 
   useEffect(() => {
     if (isAuthenticated && currentUser) {
-      try {
-        const storedPaths = localStorage.getItem(`learningPathsApp_savedPaths_${currentUser.id}`);
-        const loadedPaths: any[] = storedPaths ? JSON.parse(storedPaths) : [];
-        
-        const validatedPaths: LearningPath[] = loadedPaths.map((path, index) => {
-          const newId = (path.id && typeof path.id === 'string') ? path.id : `recovered-${Date.now()}-${index}`;
-          const newTopic = (path.topic && typeof path.topic === 'string') ? path.topic : `Untitled Path ${index + 1}`;
-          const newCreatedAt = (path.createdAt && typeof path.createdAt === 'string') ? path.createdAt : new Date().toISOString();
-
-          return {
-            id: newId,
-            topic: newTopic,
-            createdAt: newCreatedAt,
-            levels: (path.levels || []).map((level: any): Level => ({
-              name: (level.name && typeof level.name === 'string') ? level.name : "Unnamed Level",
-              modules: (level.modules || []).map((module: any): Module => ({
-                title: (module.title && typeof module.title === 'string') ? module.title : "Untitled Module",
-                description: (module.description && typeof module.description === 'string') ? module.description : "No description provided.",
-                youtubeUrl: (module.youtubeUrl && typeof module.youtubeUrl === 'string') ? module.youtubeUrl : undefined,
-                githubUrl: (module.githubUrl && typeof module.githubUrl === 'string') ? module.githubUrl : undefined,
-                isCompleted: !!module.isCompleted,
-                notes: (module.notes && typeof module.notes === 'string') ? module.notes : '',
-              })),
-              projects: (level.projects || []).map((project: any): Project => ({
-                title: (project.title && typeof project.title === 'string') ? project.title : "Untitled Project",
-                description: (project.description && typeof project.description === 'string') ? project.description : "No description provided.",
-                githubUrl: (project.githubUrl && typeof project.githubUrl === 'string' && project.githubUrl.trim() !== "") ? project.githubUrl : "#",
-              })),
-            })),
-          };
-        });
-
-        setLearningPaths(validatedPaths);
-        calculateAndSetUserMetrics(validatedPaths);
-      } catch (e) {
-        console.error("Failed to load or validate paths from localStorage:", e);
-        setError("Could not load saved paths. Data might be corrupted, or local storage is inaccessible.");
-        // Optionally clear corrupted storage: localStorage.removeItem(`learningPathsApp_savedPaths_${currentUser.id}`);
-      }
+      // Load learning paths from backend
+      loadLearningPaths();
     } else {
       setLearningPaths([]);
-      calculateAndSetUserMetrics([]);
+      // calculateAndSetUserMetrics will be called by loadLearningPaths or we can call it directly here
     }
-  }, [isAuthenticated, currentUser, calculateAndSetUserMetrics]);
+  }, [isAuthenticated, currentUser]); // Removed calculateAndSetUserMetrics from dependencies
 
-  const savePathsToLocalStorage = useCallback((pathsToSave: LearningPath[]) => {
-    if (isAuthenticated && currentUser) {
-      try {
-        localStorage.setItem(`learningPathsApp_savedPaths_${currentUser.id}`, JSON.stringify(pathsToSave));
-        calculateAndSetUserMetrics(pathsToSave);
-      } catch (e) {
-        console.error("Failed to save paths to localStorage:", e);
-        setError("Could not save path. Your browser's local storage might be disabled or full.");
+  const loadLearningPaths = async () => {
+    try {
+      console.log('Loading learning paths...');
+      const response = await fetch('http://localhost:5000/api/learning-paths', {
+        credentials: 'include'
+      });
+      console.log('Response status:', response.status);
+      if (response.ok) {
+        const paths = await response.json();
+        console.log('Loaded paths:', paths);
+        const normalizedPaths = normalizeBackendData.toCamelCase(paths);
+        setLearningPaths(normalizedPaths);
+      } else {
+        console.log('Failed to load paths, status:', response.status);
+        setLearningPaths([]);
       }
+    } catch (error) {
+      console.error('Failed to load learning paths:', error);
+      setLearningPaths([]);
     }
-  }, [isAuthenticated, currentUser, calculateAndSetUserMetrics]);
+  };
 
   const handleLogin = async (email: string, password?: string) => {
     try {
@@ -196,33 +166,32 @@ const App: React.FC = () => {
     }
   };
 
-
-  const handleLogout = () => {
-    authService.logout();
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setCurrentPath(null);
-    setLearningPaths([]);
-    setUserMetrics(null);
-    setCurrentView('landing');
-    setError(null);
-    setIntendedView(null);
-    setAuthPageMode('login'); // Reset auth page mode on logout
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setCurrentPath(null);
+      setLearningPaths([]);
+      setCurrentView('landing');
+      setError(null);
+      setIntendedView(null);
+      setAuthPageMode('login'); // Reset auth page mode on logout
+    }
   };
 
   const navigateTo = (view: View, params?: { mode?: 'login' | 'register' }) => {
-    setError(null);
-
-    if (view === 'login') {
-      setAuthPageMode(params?.mode || 'login');
+    if (params?.mode) {
+      setAuthPageMode(params.mode);
     }
 
     const protectedViews: View[] = ['dashboard', 'create', 'viewing', 'metrics'];
     if (protectedViews.includes(view) && !isAuthenticated) {
       setIntendedView(view);
       setCurrentView('login');
-      // If navigating to login due to protected route, ensure login form is shown
-      if (view !== 'login') setAuthPageMode('login'); 
       return;
     }
     
@@ -255,71 +224,97 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSavePath = (path: LearningPath) => {
+  const handleSavePath = async (path: LearningPath) => {
     if (!isAuthenticated) return;
-    if (!learningPaths.find(p => p.id === path.id)) {
-      const updatedPaths = [...learningPaths, path];
-      setLearningPaths(updatedPaths);
-      savePathsToLocalStorage(updatedPaths);
-      navigateTo('dashboard');
-    } else {
-      navigateTo('dashboard');
+    
+    console.log('Saving path:', path);
+    console.log('Path levels:', path.levels);
+    
+    // Log detailed module information
+    path.levels.forEach((level, levelIndex) => {
+      console.log(`Level ${levelIndex} (${level.name}):`);
+      level.modules.forEach((module, moduleIndex) => {
+        console.log(`  Module ${moduleIndex}:`, {
+          title: module.title,
+          description: module.description,
+          youtubeUrl: module.youtubeUrl,
+          githubUrl: module.githubUrl,
+          isCompleted: module.isCompleted,
+          notes: module.notes
+        });
+      });
+    });
+    
+    try {
+      const requestBody = {
+        topic: path.topic,
+        levels: path.levels
+      };
+      
+      console.log('Request body being sent:', JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch('http://localhost:5000/api/learning-paths', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('Save response status:', response.status);
+      if (response.ok) {
+        // Reload learning paths from backend
+        await loadLearningPaths();
+        
+        // Trigger metrics refresh
+        setMetricsRefreshTrigger(prev => prev + 1);
+        
+        navigateTo('dashboard');
+      } else {
+        const errorData = await response.json();
+        console.error('Save error:', errorData);
+        setError(errorData.error || 'Failed to save learning path');
+      }
+    } catch (error) {
+      console.error('Error saving path:', error);
+      setError('Failed to save learning path. Please try again.');
     }
   };
 
-  const handleDeletePath = (pathId: string) => {
+  const handleDeletePath = async (pathId: string) => {
     if (!isAuthenticated) {
       console.warn('[App.tsx] handleDeletePath: User not authenticated.');
       return;
     }
 
-    console.log('[App.tsx] handleDeletePath: Called with pathId:', pathId);
-    // Using try-catch for JSON.stringify in case learningPaths contains complex objects not serializable (though unlikely for this structure)
     try {
-      console.log('[App.tsx] handleDeletePath: Current learningPaths (before delete):', JSON.parse(JSON.stringify(learningPaths)));
-    } catch (e) {
-      console.warn('[App.tsx] handleDeletePath: Could not stringify learningPaths for logging.', e);
-      console.log('[App.tsx] handleDeletePath: Current learningPaths (raw):', learningPaths);
-    }
+      const response = await fetch(`http://localhost:5000/api/learning-paths/${pathId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
 
-
-    if (typeof pathId !== 'string' || !pathId) {
-        console.error("[App.tsx] handleDeletePath: Invalid pathId type or empty. pathId:", pathId, "Type:", typeof pathId);
-        setError("Could not delete path due to an internal error (invalid ID).");
-        return;
-    }
-    
-    const pathExists = learningPaths.some(p => p.id === pathId);
-    if (!pathExists) {
-        console.warn(`[App.tsx] handleDeletePath: Path ID "${pathId}" not found in current learningPaths. No action taken.`);
-        return;
-    }
-
-    const updatedPaths = learningPaths.filter(p => p.id !== pathId);
-    
-    try {
-      console.log('[App.tsx] handleDeletePath: Updated learningPaths (after filter):', JSON.parse(JSON.stringify(updatedPaths)));
-    } catch (e) {
-       console.warn('[App.tsx] handleDeletePath: Could not stringify updatedPaths for logging.', e);
-       console.log('[App.tsx] handleDeletePath: Updated learningPaths (raw):', updatedPaths);
-    }
-
-    if (updatedPaths.length === learningPaths.length) {
-        console.warn(`[App.tsx] handleDeletePath: Filter did not remove any paths. Path ID "${pathId}" might not have matched, or an unexpected issue occurred. Original length: ${learningPaths.length}, New length: ${updatedPaths.length}`);
-    }
-    
-    setLearningPaths(updatedPaths);
-    savePathsToLocalStorage(updatedPaths); 
-
-    if (currentPath?.id === pathId) {
-      console.log(`[App.tsx] handleDeletePath: Current viewed path (ID: ${currentPath.id}) was deleted. Clearing currentPath.`);
-      setCurrentPath(null);
-      if (currentView === 'viewing') {
-        console.log('[App.tsx] handleDeletePath: Navigating to dashboard after deleting currently viewed path.');
-        navigateTo('dashboard'); 
+      if (response.ok) {
+        // Reload learning paths from backend
+        await loadLearningPaths();
+        
+        // Trigger metrics refresh
+        setMetricsRefreshTrigger(prev => prev + 1);
+        
+        if (currentPath?.id === pathId) {
+          setCurrentPath(null);
+          if (currentView === 'viewing') {
+            navigateTo('dashboard');
+          }
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to delete learning path');
       }
+    } catch (error) {
+      console.error('Error deleting path:', error);
+      setError('Failed to delete learning path. Please try again.');
     }
-    console.log(`[App.tsx] handleDeletePath: Process completed for pathId: "${pathId}".`);
   };
 
   const handleViewPath = (path: LearningPath) => {
@@ -333,75 +328,116 @@ const App: React.FC = () => {
     setCurrentView('viewing');
   };
 
-  const handleToggleModuleCompletion = (pathId: string, levelName: string, moduleTitle: string) => {
+  const handleToggleModuleCompletion = async (pathId: string, levelName: string, moduleTitle: string) => {
     if (!isAuthenticated) return;
-    const updatedPaths = learningPaths.map(p => {
-      if (p.id === pathId) {
-        return {
-          ...p,
-          levels: p.levels.map(l => {
-            if (l.name === levelName) {
-              return {
-                ...l,
-                modules: l.modules.map(m => {
-                  if (m.title === moduleTitle) {
-                    return { ...m, isCompleted: !m.isCompleted };
-                  }
-                  return m;
-                }),
-              };
-            }
-            return l;
-          }),
-        };
-      }
-      return p;
-    });
-    setLearningPaths(updatedPaths);
-    savePathsToLocalStorage(updatedPaths);
+    
+    try {
+      // Find the module to get its ID
+      const path = learningPaths.find(p => p.id === pathId);
+      if (!path) return;
 
-    if (currentPath && currentPath.id === pathId) {
-        const updatedCurrentPath = updatedPaths.find(p => p.id === pathId);
-        if (updatedCurrentPath) setCurrentPath(updatedCurrentPath);
+      const level = path.levels.find(l => l.name === levelName);
+      if (!level) return;
+
+      const module = level.modules.find(m => m.title === moduleTitle);
+      if (!module) return;
+
+      const response = await fetch(`http://localhost:5000/api/learning-paths/${pathId}/modules/${module.id}/complete`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          isCompleted: !module.isCompleted
+        })
+      });
+
+      if (response.ok) {
+        // Reload learning paths from backend
+        await loadLearningPaths();
+        
+        // Trigger metrics refresh
+        setMetricsRefreshTrigger(prev => prev + 1);
+        
+        // Update current path if it's the one being viewed
+        if (currentPath && currentPath.id === pathId) {
+          const updatedPathsResponse = await fetch('http://localhost:5000/api/learning-paths', {
+            credentials: 'include'
+          });
+          if (updatedPathsResponse.ok) {
+            const updatedPaths = await updatedPathsResponse.json();
+            const normalizedPaths = normalizeBackendData.toCamelCase(updatedPaths);
+            const updatedPath = normalizedPaths.find((p: LearningPath) => p.id === pathId);
+            if (updatedPath) setCurrentPath(updatedPath);
+          }
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to update module completion');
+      }
+    } catch (error) {
+      console.error('Error toggling module completion:', error);
+      setError('Failed to update module completion. Please try again.');
     }
   };
 
-  const handleUpdateModuleNotes = (pathId: string, levelName: string, moduleTitle: string, notes: string) => {
+  const handleUpdateModuleNotes = async (pathId: string, levelName: string, moduleTitle: string, notes: string) => {
     if (!isAuthenticated) return;
-    const updatedPaths = learningPaths.map(p => {
-      if (p.id === pathId) {
-        return {
-          ...p,
-          levels: p.levels.map(l => {
-            if (l.name === levelName) {
-              return {
-                ...l,
-                modules: l.modules.map(m => {
-                  if (m.title === moduleTitle) {
-                    return { ...m, notes: notes };
-                  }
-                  return m;
-                }),
-              };
-            }
-            return l;
-          }),
-        };
-      }
-      return p;
-    });
-    setLearningPaths(updatedPaths);
-    savePathsToLocalStorage(updatedPaths);
+    
+    try {
+      // Find the module to get its ID
+      const path = learningPaths.find(p => p.id === pathId);
+      if (!path) return;
 
-    if (currentPath && currentPath.id === pathId) {
-        const updatedCurrentPath = updatedPaths.find(p => p.id === pathId);
-        if (updatedCurrentPath) setCurrentPath(updatedCurrentPath);
+      const level = path.levels.find(l => l.name === levelName);
+      if (!level) return;
+
+      const module = level.modules.find(m => m.title === moduleTitle);
+      if (!module) return;
+
+      const response = await fetch(`http://localhost:5000/api/learning-paths/${pathId}/modules/${module.id}/notes`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          notes: notes
+        })
+      });
+
+      if (response.ok) {
+        // Reload learning paths from backend
+        await loadLearningPaths();
+        
+        // Trigger metrics refresh
+        setMetricsRefreshTrigger(prev => prev + 1);
+        
+        // Update current path if it's the one being viewed
+        if (currentPath && currentPath.id === pathId) {
+          const updatedPathsResponse = await fetch('http://localhost:5000/api/learning-paths', {
+            credentials: 'include'
+          });
+          if (updatedPathsResponse.ok) {
+            const updatedPaths = await updatedPathsResponse.json();
+            const normalizedPaths = normalizeBackendData.toCamelCase(updatedPaths);
+            const updatedPath = normalizedPaths.find((p: LearningPath) => p.id === pathId);
+            if (updatedPath) setCurrentPath(updatedPath);
+          }
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to update module notes');
+      }
+    } catch (error) {
+      console.error('Error updating module notes:', error);
+      setError('Failed to update module notes. Please try again.');
     }
   };
-
 
   const renderContent = () => {
-    if (isLoading && currentView !== 'metrics') { 
+    if (isLoading) { 
       return <div className="flex justify-center items-center h-64"><LoadingSpinner /></div>;
     }
     
@@ -429,7 +465,6 @@ const App: React.FC = () => {
             onViewPath={handleViewPath}
             onDeletePath={handleDeletePath}
             onNavigate={navigateTo}
-            userMetrics={userMetrics}
           />
         );
       case 'create':
@@ -450,7 +485,7 @@ const App: React.FC = () => {
         navigateTo('dashboard'); 
         return <div className="text-center p-4">Redirecting to dashboard...</div>;
       case 'metrics':
-        return <UserMetricsPage metrics={userMetrics} isLoading={isLoading && !userMetrics} />; 
+        return <UserMetricsPage key={metricsRefreshTrigger} />;
       default:
         return <LandingPage onNavigate={navigateTo} />;
     }

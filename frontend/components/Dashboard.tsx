@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
 import { LearningPath, UserMetrics } from '../types';
 
+type View = 'landing' | 'login' | 'dashboard' | 'create' | 'metrics';
+
 interface DashboardProps {
   learningPaths: LearningPath[];
   onViewPath: (path: LearningPath) => void;
   onDeletePath: (pathId: string) => void;
-  onNavigate: (view: string) => void;
+  onNavigate: (view: View, params?: { mode?: 'login' | 'register' }) => void;
   userMetrics?: UserMetrics;
 }
 

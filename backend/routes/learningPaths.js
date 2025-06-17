@@ -7,22 +7,86 @@ const { authenticateToken } = require('./auth');
 router.get('/', authenticateToken, (req, res) => {
   const userId = req.user.id;
 
-  db.all(`
-    SELECT lp.*, 
-           COUNT(DISTINCT l.id) as level_count,
-           COUNT(DISTINCT m.id) as module_count,
-           SUM(CASE WHEN m.is_completed = 1 THEN 1 ELSE 0 END) as completed_modules
-    FROM learning_paths lp
-    LEFT JOIN levels l ON l.learning_path_id = lp.id
-    LEFT JOIN modules m ON m.level_id = l.id
-    WHERE lp.user_id = ?
-    GROUP BY lp.id
-    ORDER BY lp.created_at DESC
-  `, [userId], (err, paths) => {
+  console.log('Getting learning paths for user:', userId);
+
+  // First get all learning paths for the user
+  db.all('SELECT * FROM learning_paths WHERE user_id = ? ORDER BY created_at DESC', [userId], (err, paths) => {
     if (err) {
       return res.status(500).json({ error: 'Database error' });
     }
-    res.json(paths);
+
+    console.log('Found', paths.length, 'learning paths');
+
+    if (paths.length === 0) {
+      return res.json([]);
+    }
+
+    // For each path, get its levels and modules
+    const getPathWithDetails = (path) => {
+      return new Promise((resolve, reject) => {
+        // First get all levels for this path
+        db.all('SELECT * FROM levels WHERE learning_path_id = ? ORDER BY order_index', [path.id], (err, levels) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          // For each level, get its modules and projects
+          const getLevelDetails = (level) => {
+            return new Promise((resolve, reject) => {
+              // Get modules for this level
+              db.all('SELECT * FROM modules WHERE level_id = ? ORDER BY order_index', [level.id], (err, modules) => {
+                if (err) {
+                  reject(err);
+                  return;
+                }
+
+                // Get projects for this level
+                db.all('SELECT * FROM projects WHERE level_id = ? ORDER BY order_index', [level.id], (err, projects) => {
+                  if (err) {
+                    reject(err);
+                    return;
+                  }
+
+                  resolve({
+                    ...level,
+                    modules: modules,
+                    projects: projects
+                  });
+                });
+              });
+            });
+          };
+
+          // Get details for all levels
+          Promise.all(levels.map(getLevelDetails))
+            .then(levelsWithDetails => {
+              const totalModules = levelsWithDetails.reduce((sum, level) => sum + level.modules.length, 0);
+              console.log(`Path ${path.id} (${path.topic}): ${levelsWithDetails.length} levels, ${totalModules} modules`);
+
+              resolve({
+                ...path,
+                levels: levelsWithDetails
+              });
+            })
+            .catch(reject);
+        });
+      });
+    };
+
+    // Get details for all paths
+    Promise.all(paths.map(getPathWithDetails))
+      .then(pathsWithDetails => {
+        const totalModules = pathsWithDetails.reduce((sum, path) => 
+          sum + path.levels.reduce((levelSum, level) => levelSum + level.modules.length, 0), 0
+        );
+        console.log(`Total modules across all paths: ${totalModules}`);
+        res.json(pathsWithDetails);
+      })
+      .catch(err => {
+        console.error('Error getting path details:', err);
+        res.status(500).json({ error: 'Database error' });
+      });
   });
 });
 
@@ -42,52 +106,51 @@ router.get('/:id', authenticateToken, (req, res) => {
         return res.status(404).json({ error: 'Learning path not found' });
       }
 
-      // Get all levels with their modules and projects
-      db.all(`
-        SELECT l.*, 
-               json_group_array(
-                 json_object(
-                   'id', m.id,
-                   'title', m.title,
-                   'description', m.description,
-                   'youtube_url', m.youtube_url,
-                   'github_url', m.github_url,
-                   'is_completed', m.is_completed,
-                   'notes', m.notes,
-                   'order_index', m.order_index
-                 )
-               ) as modules,
-               json_group_array(
-                 json_object(
-                   'id', p.id,
-                   'title', p.title,
-                   'description', p.description,
-                   'github_url', p.github_url,
-                   'order_index', p.order_index
-                 )
-               ) as projects
-        FROM levels l
-        LEFT JOIN modules m ON m.level_id = l.id
-        LEFT JOIN projects p ON p.level_id = l.id
-        WHERE l.learning_path_id = ?
-        GROUP BY l.id
-        ORDER BY l.order_index
-      `, [pathId], (err, levels) => {
+      // Get all levels for this path
+      db.all('SELECT * FROM levels WHERE learning_path_id = ? ORDER BY order_index', [pathId], (err, levels) => {
         if (err) {
           return res.status(500).json({ error: 'Database error' });
         }
 
-        // Parse JSON strings in modules and projects
-        const formattedLevels = levels.map(level => ({
-          ...level,
-          modules: JSON.parse(level.modules).filter(m => m.id !== null),
-          projects: JSON.parse(level.projects).filter(p => p.id !== null)
-        }));
+        // For each level, get its modules and projects
+        const getLevelDetails = (level) => {
+          return new Promise((resolve, reject) => {
+            // Get modules for this level
+            db.all('SELECT * FROM modules WHERE level_id = ? ORDER BY order_index', [level.id], (err, modules) => {
+              if (err) {
+                reject(err);
+                return;
+              }
 
-        res.json({
-          ...path,
-          levels: formattedLevels
-        });
+              // Get projects for this level
+              db.all('SELECT * FROM projects WHERE level_id = ? ORDER BY order_index', [level.id], (err, projects) => {
+                if (err) {
+                  reject(err);
+                  return;
+                }
+
+                resolve({
+                  ...level,
+                  modules: modules,
+                  projects: projects
+                });
+              });
+            });
+          });
+        };
+
+        // Get details for all levels
+        Promise.all(levels.map(getLevelDetails))
+          .then(levelsWithDetails => {
+            res.json({
+              ...path,
+              levels: levelsWithDetails
+            });
+          })
+          .catch(err => {
+            console.error('Error getting level details:', err);
+            res.status(500).json({ error: 'Database error' });
+          });
       });
     }
   );
@@ -98,8 +161,21 @@ router.post('/', authenticateToken, (req, res) => {
   const userId = req.user.id;
   const { topic, levels } = req.body;
 
-  db.run('INSERT INTO learning_paths (user_id, topic) VALUES (?, ?)',
-    [userId, topic],
+  console.log('Creating learning path for user:', userId);
+  console.log('Topic:', topic);
+  console.log('Number of levels:', levels ? levels.length : 0);
+  
+  if (levels) {
+    levels.forEach((level, index) => {
+      console.log(`Level ${index}: ${level.name} - ${level.modules ? level.modules.length : 0} modules`);
+    });
+  }
+
+  const createdAt = new Date().toISOString();
+  console.log('Created at:', createdAt);
+
+  db.run('INSERT INTO learning_paths (user_id, topic, created_at) VALUES (?, ?, ?)',
+    [userId, topic, createdAt],
     function(err) {
       if (err) {
         return res.status(500).json({ error: 'Error creating learning path' });
@@ -121,8 +197,19 @@ router.post('/', authenticateToken, (req, res) => {
               }
 
               const levelId = this.lastID;
+              console.log(`Inserted level ${levelIndex}: ${level.name} with ID ${levelId}`);
+              
               const modulePromises = level.modules.map((module, moduleIndex) => {
                 return new Promise((resolve, reject) => {
+                  console.log(`Module ${moduleIndex}:`, {
+                    title: module.title,
+                    description: module.description,
+                    youtubeUrl: module.youtubeUrl,
+                    githubUrl: module.githubUrl,
+                    isCompleted: module.isCompleted,
+                    notes: module.notes
+                  });
+                  
                   db.run(`
                     INSERT INTO modules 
                     (level_id, title, description, youtube_url, github_url, is_completed, notes, order_index)
@@ -138,6 +225,7 @@ router.post('/', authenticateToken, (req, res) => {
                     moduleIndex
                   ], function(err) {
                     if (err) {
+                      console.error('Error inserting module:', err);
                       reject(err);
                       return;
                     }
@@ -174,6 +262,7 @@ router.post('/', authenticateToken, (req, res) => {
               Promise.all([...modulePromises, ...projectPromises])
                 .then(() => {
                   completedLevels++;
+                  console.log(`Completed inserting level ${levelIndex} with ${level.modules.length} modules`);
                   resolve();
                 })
                 .catch(reject);
@@ -189,29 +278,20 @@ router.post('/', authenticateToken, (req, res) => {
             await insertLevel(levels[i], i);
           }
 
-          // Update user metrics
-          db.run(`
-            UPDATE user_metrics 
-            SET total_paths = total_paths + 1,
-                total_modules = total_modules + ?,
-                completed_modules = completed_modules + ?,
-                average_completion_rate = CASE 
-                  WHEN total_modules + ? > 0 
-                  THEN ((completed_modules + ?) * 100) / (total_modules + ?)
-                  ELSE 0
-                END
-            WHERE user_id = ?
-          `, [
-            completedModules,
-            completedModules,
-            completedModules,
-            completedModules,
-            completedModules,
-            userId
-          ]);
+          console.log(`Total levels inserted: ${completedLevels}`);
+          console.log(`Total modules inserted: ${completedModules}`);
 
-          res.status(201).json({ id: pathId, message: 'Learning path created successfully' });
+          // Update user metrics
+          recalculateUserMetrics(userId, (err) => {
+            if (err) {
+              console.error('Error recalculating user metrics:', err);
+              res.status(500).json({ error: 'Error recalculating user metrics' });
+            } else {
+              res.status(201).json({ id: pathId, message: 'Learning path created successfully' });
+            }
+          });
         } catch (error) {
+          console.error('Error in insertAllLevels:', error);
           res.status(500).json({ error: 'Error creating learning path details' });
         }
       };
@@ -268,6 +348,15 @@ router.put('/:id', authenticateToken, (req, res) => {
                     const levelId = this.lastID;
                     const modulePromises = level.modules.map((module, moduleIndex) => {
                       return new Promise((resolve, reject) => {
+                        console.log(`Module ${moduleIndex}:`, {
+                          title: module.title,
+                          description: module.description,
+                          youtubeUrl: module.youtubeUrl,
+                          githubUrl: module.githubUrl,
+                          isCompleted: module.isCompleted,
+                          notes: module.notes
+                        });
+                        
                         db.run(`
                           INSERT INTO modules 
                           (level_id, title, description, youtube_url, github_url, is_completed, notes, order_index)
@@ -283,6 +372,7 @@ router.put('/:id', authenticateToken, (req, res) => {
                           moduleIndex
                         ], function(err) {
                           if (err) {
+                            console.error('Error inserting module:', err);
                             reject(err);
                             return;
                           }
@@ -332,26 +422,14 @@ router.put('/:id', authenticateToken, (req, res) => {
                 }
 
                 // Update user metrics
-                db.run(`
-                  UPDATE user_metrics 
-                  SET total_modules = ?,
-                      completed_modules = ?,
-                      average_completion_rate = CASE 
-                        WHEN ? > 0 
-                        THEN (? * 100) / ?
-                        ELSE 0
-                      END
-                  WHERE user_id = ?
-                `, [
-                  completedModules,
-                  completedModules,
-                  completedModules,
-                  completedModules,
-                  completedModules,
-                  userId
-                ]);
-
-                res.json({ message: 'Learning path updated successfully' });
+                recalculateUserMetrics(userId, (err) => {
+                  if (err) {
+                    console.error('Error recalculating user metrics:', err);
+                    res.status(500).json({ error: 'Error recalculating user metrics' });
+                  } else {
+                    res.json({ message: 'Learning path updated successfully' });
+                  }
+                });
               } catch (error) {
                 res.status(500).json({ error: 'Error updating learning path details' });
               }
@@ -401,27 +479,14 @@ router.delete('/:id', authenticateToken, (req, res) => {
           }
 
           // Update user metrics
-          db.run(`
-            UPDATE user_metrics 
-            SET total_paths = total_paths - 1,
-                total_modules = total_modules - ?,
-                completed_modules = completed_modules - ?,
-                average_completion_rate = CASE 
-                  WHEN total_modules - ? > 0 
-                  THEN ((completed_modules - ?) * 100) / (total_modules - ?)
-                  ELSE 0
-                END
-            WHERE user_id = ?
-          `, [
-            counts.total_modules || 0,
-            counts.completed_modules || 0,
-            counts.total_modules || 0,
-            counts.completed_modules || 0,
-            counts.total_modules || 0,
-            userId
-          ]);
-
-          res.json({ message: 'Learning path deleted successfully' });
+          recalculateUserMetrics(userId, (err) => {
+            if (err) {
+              console.error('Error recalculating user metrics:', err);
+              res.status(500).json({ error: 'Error recalculating user metrics' });
+            } else {
+              res.json({ message: 'Learning path deleted successfully' });
+            }
+          });
         });
       });
     }
@@ -450,26 +515,40 @@ router.patch('/:pathId/modules/:moduleId/complete', authenticateToken, (req, res
     }
 
     // Update module completion status
-    db.run('UPDATE modules SET is_completed = ? WHERE id = ?',
+    db.run('UPDATE modules SET is_completed = ?, updated_at = COALESCE(CURRENT_TIMESTAMP, datetime("now")) WHERE id = ?',
       [isCompleted ? 1 : 0, moduleId],
       (err) => {
         if (err) {
-          return res.status(500).json({ error: 'Error updating module' });
+          // If updated_at column doesn't exist, try without it
+          db.run('UPDATE modules SET is_completed = ? WHERE id = ?',
+            [isCompleted ? 1 : 0, moduleId],
+            (err2) => {
+              if (err2) {
+                return res.status(500).json({ error: 'Error updating module' });
+              }
+
+              // Update user metrics
+              recalculateUserMetrics(userId, (err) => {
+                if (err) {
+                  console.error('Error recalculating user metrics:', err);
+                  res.status(500).json({ error: 'Error recalculating user metrics' });
+                } else {
+                  res.json({ message: 'Module updated successfully' });
+                }
+              });
+            }
+          );
+        } else {
+          // Update user metrics
+          recalculateUserMetrics(userId, (err) => {
+            if (err) {
+              console.error('Error recalculating user metrics:', err);
+              res.status(500).json({ error: 'Error recalculating user metrics' });
+            } else {
+              res.json({ message: 'Module updated successfully' });
+            }
+          });
         }
-
-        // Update user metrics
-        db.run(`
-          UPDATE user_metrics 
-          SET completed_modules = completed_modules + ?,
-              average_completion_rate = CASE 
-                WHEN total_modules > 0 
-                THEN (completed_modules * 100) / total_modules
-                ELSE 0
-              END
-          WHERE user_id = ?
-        `, [isCompleted ? 1 : -1, userId]);
-
-        res.json({ message: 'Module updated successfully' });
       }
     );
   });
@@ -508,5 +587,78 @@ router.patch('/:pathId/modules/:moduleId/notes', authenticateToken, (req, res) =
     );
   });
 });
+
+// Function to recalculate user metrics (imported from userMetrics)
+const recalculateUserMetrics = (userId, callback) => {
+  // Get all learning paths for the user
+  db.all(`
+    SELECT lp.id, lp.topic,
+           COUNT(DISTINCT l.id) as level_count,
+           COUNT(m.id) as total_modules,
+           SUM(CASE WHEN m.is_completed = 1 THEN 1 ELSE 0 END) as completed_modules
+    FROM learning_paths lp
+    LEFT JOIN levels l ON l.learning_path_id = lp.id
+    LEFT JOIN modules m ON m.level_id = l.id
+    WHERE lp.user_id = ?
+    GROUP BY lp.id
+  `, [userId], (err, paths) => {
+    if (err) {
+      return callback(err);
+    }
+
+    const totalPaths = paths.length;
+    const totalModules = paths.reduce((sum, path) => sum + (path.total_modules || 0), 0);
+    const completedModules = paths.reduce((sum, path) => sum + (path.completed_modules || 0), 0);
+    
+    // Calculate completed paths (paths where all modules are completed)
+    const completedPaths = paths.filter(path => 
+      path.total_modules > 0 && path.total_modules === path.completed_modules
+    ).length;
+    
+    const averageCompletionRate = totalModules > 0 ? Math.round((completedModules * 100) / totalModules) : 0;
+
+    console.log(`Recalculated metrics for user ${userId}:`, {
+      totalPaths,
+      completedPaths,
+      totalModules,
+      completedModules,
+      averageCompletionRate
+    });
+
+    // Update user metrics
+    db.run(`
+      UPDATE user_metrics 
+      SET total_paths = ?,
+          completed_paths = ?,
+          total_modules = ?,
+          completed_modules = ?,
+          average_completion_rate = ?,
+          last_updated = CURRENT_TIMESTAMP
+      WHERE user_id = ?
+    `, [
+      totalPaths,
+      completedPaths,
+      totalModules,
+      completedModules,
+      averageCompletionRate,
+      userId
+    ], function(err) {
+      if (err) {
+        return callback(err);
+      }
+      
+      if (this.changes === 0) {
+        // Create metrics record if it doesn't exist
+        db.run(`
+          INSERT INTO user_metrics 
+          (user_id, total_paths, completed_paths, total_modules, completed_modules, average_completion_rate)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, [userId, totalPaths, completedPaths, totalModules, completedModules, averageCompletionRate], callback);
+      } else {
+        callback(null);
+      }
+    });
+  });
+};
 
 module.exports = router; 

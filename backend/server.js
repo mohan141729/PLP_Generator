@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
@@ -28,6 +29,7 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Ensure db directory exists
 const dbDir = path.resolve(__dirname, 'db');
@@ -75,6 +77,7 @@ db.serialize(() => {
     is_completed BOOLEAN DEFAULT 0,
     notes TEXT,
     order_index INTEGER NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (level_id) REFERENCES levels(id) ON DELETE CASCADE
   )`);
 
