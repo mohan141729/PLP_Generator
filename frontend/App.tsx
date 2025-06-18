@@ -10,6 +10,7 @@ import { Navbar } from './components/Navbar';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage'; 
 import * as authService from './services/authService';
+import { learningPathService } from './services/api';
 
 type View = 'landing' | 'login' | 'dashboard' | 'create' | 'viewing' | 'metrics';
 
@@ -105,19 +106,10 @@ const App: React.FC = () => {
   const loadLearningPaths = async () => {
     try {
       console.log('Loading learning paths...');
-      const response = await fetch('http://localhost:5000/api/learning-paths', {
-        credentials: 'include'
-      });
-      console.log('Response status:', response.status);
-      if (response.ok) {
-        const paths = await response.json();
-        console.log('Loaded paths:', paths);
-        const normalizedPaths = normalizeBackendData.toCamelCase(paths);
-        setLearningPaths(normalizedPaths);
-      } else {
-        console.log('Failed to load paths, status:', response.status);
-        setLearningPaths([]);
-      }
+      const response = await learningPathService.getAllPaths();
+      console.log('Loaded paths:', response.data);
+      const normalizedPaths = normalizeBackendData.toCamelCase(response.data);
+      setLearningPaths(normalizedPaths);
     } catch (error) {
       console.error('Failed to load learning paths:', error);
       setLearningPaths([]);
@@ -253,17 +245,10 @@ const App: React.FC = () => {
       
       console.log('Request body being sent:', JSON.stringify(requestBody, null, 2));
       
-      const response = await fetch('http://localhost:5000/api/learning-paths', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(requestBody)
-      });
+      const response = await learningPathService.createPath(requestBody);
 
       console.log('Save response status:', response.status);
-      if (response.ok) {
+      if (response.status === 201 || response.status === 200) {
         // Reload learning paths from backend
         await loadLearningPaths();
         
@@ -272,9 +257,8 @@ const App: React.FC = () => {
         
         navigateTo('dashboard');
       } else {
-        const errorData = await response.json();
-        console.error('Save error:', errorData);
-        setError(errorData.error || 'Failed to save learning path');
+        console.error('Save error:', response.data);
+        setError(response.data.error || 'Failed to save learning path');
       }
     } catch (error) {
       console.error('Error saving path:', error);
@@ -289,12 +273,9 @@ const App: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/learning-paths/${pathId}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
+      const response = await learningPathService.deletePath(pathId);
 
-      if (response.ok) {
+      if (response.status === 200 || response.status === 204) {
         // Reload learning paths from backend
         await loadLearningPaths();
         
@@ -308,8 +289,7 @@ const App: React.FC = () => {
           }
         }
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to delete learning path');
+        setError(response.data.error || 'Failed to delete learning path');
       }
     } catch (error) {
       console.error('Error deleting path:', error);
@@ -341,19 +321,15 @@ const App: React.FC = () => {
 
       const module = level.modules.find(m => m.title === moduleTitle);
       if (!module) return;
+      if (!module.id) {
+        console.error('Module ID not found for:', moduleTitle);
+        setError('Module ID not found. Please refresh and try again.');
+        return;
+      }
 
-      const response = await fetch(`http://localhost:5000/api/learning-paths/${pathId}/modules/${module.id}/complete`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          isCompleted: !module.isCompleted
-        })
-      });
+      const response = await learningPathService.toggleModuleCompletion(pathId, module.id.toString(), !module.isCompleted);
 
-      if (response.ok) {
+      if (response.status === 200) {
         // Reload learning paths from backend
         await loadLearningPaths();
         
@@ -362,19 +338,15 @@ const App: React.FC = () => {
         
         // Update current path if it's the one being viewed
         if (currentPath && currentPath.id === pathId) {
-          const updatedPathsResponse = await fetch('http://localhost:5000/api/learning-paths', {
-            credentials: 'include'
-          });
-          if (updatedPathsResponse.ok) {
-            const updatedPaths = await updatedPathsResponse.json();
-            const normalizedPaths = normalizeBackendData.toCamelCase(updatedPaths);
+          const updatedPathsResponse = await learningPathService.getAllPaths();
+          if (updatedPathsResponse.status === 200) {
+            const normalizedPaths = normalizeBackendData.toCamelCase(updatedPathsResponse.data);
             const updatedPath = normalizedPaths.find((p: LearningPath) => p.id === pathId);
             if (updatedPath) setCurrentPath(updatedPath);
           }
         }
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to update module completion');
+        setError(response.data.error || 'Failed to update module completion');
       }
     } catch (error) {
       console.error('Error toggling module completion:', error);
@@ -395,19 +367,15 @@ const App: React.FC = () => {
 
       const module = level.modules.find(m => m.title === moduleTitle);
       if (!module) return;
+      if (!module.id) {
+        console.error('Module ID not found for:', moduleTitle);
+        setError('Module ID not found. Please refresh and try again.');
+        return;
+      }
 
-      const response = await fetch(`http://localhost:5000/api/learning-paths/${pathId}/modules/${module.id}/notes`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          notes: notes
-        })
-      });
+      const response = await learningPathService.updateModuleNotes(pathId, module.id.toString(), notes);
 
-      if (response.ok) {
+      if (response.status === 200) {
         // Reload learning paths from backend
         await loadLearningPaths();
         
@@ -416,19 +384,15 @@ const App: React.FC = () => {
         
         // Update current path if it's the one being viewed
         if (currentPath && currentPath.id === pathId) {
-          const updatedPathsResponse = await fetch('http://localhost:5000/api/learning-paths', {
-            credentials: 'include'
-          });
-          if (updatedPathsResponse.ok) {
-            const updatedPaths = await updatedPathsResponse.json();
-            const normalizedPaths = normalizeBackendData.toCamelCase(updatedPaths);
+          const updatedPathsResponse = await learningPathService.getAllPaths();
+          if (updatedPathsResponse.status === 200) {
+            const normalizedPaths = normalizeBackendData.toCamelCase(updatedPathsResponse.data);
             const updatedPath = normalizedPaths.find((p: LearningPath) => p.id === pathId);
             if (updatedPath) setCurrentPath(updatedPath);
           }
         }
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to update module notes');
+        setError(response.data.error || 'Failed to update module notes');
       }
     } catch (error) {
       console.error('Error updating module notes:', error);

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api', // Backend server URL
+  baseURL: 'https://plp-generator.onrender.com/api', // Local backend server URL
   headers: {
     'Content-Type': 'application/json',
   },

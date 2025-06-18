@@ -2,7 +2,7 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { GEMINI_API_MODEL_TEXT, MODULE_COUNT_PER_LEVEL } from '../constants';
 import { GeminiLearningPathResponse, LearningPath, Level, Module, Project, GeminiLevelResponse, GeminiModuleResponse, GeminiProjectResponse } from '../types';
 
-const API_KEY = import.meta.env.VITE_API_KEY;
+const API_KEY = import.meta.env.VITE_API_KEY || "AIzaSyCV5NJivQRBFkDW8fQS7WMbGlY3injg1PA";
 
 if (!API_KEY) {
   // This check is mostly for local dev. In AI Studio, it's expected to be set.
