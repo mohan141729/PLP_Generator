@@ -60,17 +60,6 @@ const UserMetricsPage: React.FC = () => {
     }
   };
 
-  const recalculateMetrics = async () => {
-    try {
-      setLoading(true);
-      await userMetricsService.recalculateMetrics();
-      await fetchMetrics();
-    } catch (err) {
-      console.error('Error recalculating metrics:', err);
-      setError('Failed to recalculate metrics.');
-    }
-  };
-
   const exportMetrics = () => {
     if (!metrics) return;
     
@@ -821,7 +810,7 @@ Generated with LearnPath AI - ${new Date().toLocaleDateString()}`;
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {pathMetrics.map((path, index) => (
+                {pathMetrics.map((path) => (
                   <div 
                     key={path.id} 
                     className="bg-white rounded-lg shadow p-6 cursor-pointer hover:shadow-lg transition-shadow duration-200 h-48 flex flex-col justify-between"

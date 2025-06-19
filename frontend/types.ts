@@ -161,7 +161,7 @@ export const normalizeBackendData = {
     
     const transformed: any = {};
     for (const [key, value] of Object.entries(obj)) {
-      const camelKey = key.replace(/_([a-z])/g, (match, letter) => letter.toUpperCase());
+      const camelKey = key.replace(/_([a-z])/g, (_match, letter) => letter.toUpperCase());
       transformed[camelKey] = normalizeBackendData.toCamelCase(value);
     }
     return transformed;

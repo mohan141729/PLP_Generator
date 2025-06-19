@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { LearningPath, LearningPathCreationRequest, User, Module, Project, Level, normalizeBackendData } from './types';
+import React, { useState, useEffect } from 'react';
+import { LearningPath, LearningPathCreationRequest, User, normalizeBackendData } from './types';
 import LearningPathForm from './components/LearningPathForm';
 import LearningPathDisplay from './components/LearningPathDisplay';
 import Dashboard from './components/Dashboard';
@@ -25,46 +25,6 @@ const App: React.FC = () => {
   const [intendedView, setIntendedView] = useState<View | null>(null);
   const [authPageMode, setAuthPageMode] = useState<'login' | 'register'>('login');
   const [metricsRefreshTrigger, setMetricsRefreshTrigger] = useState<number>(0);
-
-  const calculateAndSetUserMetrics = useCallback((paths: LearningPath[]) => {
-    // Only calculate metrics if user is authenticated
-    if (!isAuthenticated || !currentUser) {
-      return;
-    }
-    
-    let totalModules = 0;
-    let completedModules = 0;
-    let completedPaths = 0;
-
-    paths.forEach(path => {
-      let pathModules = 0;
-      let pathCompletedModules = 0;
-      
-      // Check if path has levels property and it's an array
-      if (path.levels && Array.isArray(path.levels)) {
-        path.levels.forEach(level => {
-          if (level.modules && Array.isArray(level.modules)) {
-            level.modules.forEach(module => {
-              totalModules++;
-              pathModules++;
-              if (module.isCompleted) {
-                completedModules++;
-                pathCompletedModules++;
-              }
-            });
-          }
-        });
-      }
-      
-      if (pathModules > 0 && pathModules === pathCompletedModules) {
-        completedPaths++;
-      }
-    });
-
-    const averageCompletionRate = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
-
-    // This function is now empty as the metrics are no longer stored in the component state
-  }, []); // Removed isAuthenticated and currentUser dependencies
 
   // Check authentication status on app mount
   useEffect(() => {
@@ -99,7 +59,6 @@ const App: React.FC = () => {
       loadLearningPaths();
     } else {
       setLearningPaths([]);
-      // calculateAndSetUserMetrics will be called by loadLearningPaths or we can call it directly here
     }
   }, [isAuthenticated, currentUser]); // Removed calculateAndSetUserMetrics from dependencies
 
@@ -322,8 +281,16 @@ const App: React.FC = () => {
       const module = level.modules.find(m => m.title === moduleTitle);
       if (!module) return;
       if (!module.id) {
-        console.error('Module ID not found for:', moduleTitle);
-        setError('Module ID not found. Please refresh and try again.');
+        const debugInfo = {
+          pathId,
+          levelName,
+          moduleTitle,
+          module,
+          level,
+          path
+        };
+        console.error('Module ID not found for:', moduleTitle, debugInfo);
+        setError('Module ID not found. Please refresh and try again. If this persists, contact support.');
         return;
       }
 
@@ -368,8 +335,16 @@ const App: React.FC = () => {
       const module = level.modules.find(m => m.title === moduleTitle);
       if (!module) return;
       if (!module.id) {
-        console.error('Module ID not found for:', moduleTitle);
-        setError('Module ID not found. Please refresh and try again.');
+        const debugInfo = {
+          pathId,
+          levelName,
+          moduleTitle,
+          module,
+          level,
+          path
+        };
+        console.error('Module ID not found for:', moduleTitle, debugInfo);
+        setError('Module ID not found. Please refresh and try again. If this persists, contact support.');
         return;
       }
 
