@@ -23,9 +23,6 @@ app.use((req, res, next) => {
 // Middleware
 app.use(cors({
   origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://plp-generator-35zn.vercel.app',
     'https://plp-generator.vercel.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
