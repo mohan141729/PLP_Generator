@@ -25,7 +25,8 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
-    'https://plp-generator.vercel.app/', // deployed frontend
+    'https://plp-generator-35zn.vercel.app',
+    'https://plp-generator.vercel.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
