@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../db/database');
+const cors = require('cors');
 
 // Middleware to authenticate JWT token from cookies
 const authenticateToken = (req, res, next) => {
@@ -60,8 +61,8 @@ router.post('/register', async (req, res) => {
           // Set JWT as HTTP-only cookie
           res.cookie('jwt', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production', // Only use secure in production
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-site in prod, 'lax' for local dev
+            secure: true, // in production
+            sameSite: 'none', // in production
             maxAge: 24 * 60 * 60 * 1000 // 24 hours
           });
 
@@ -105,8 +106,8 @@ router.post('/login', async (req, res) => {
       // Set JWT as HTTP-only cookie
       res.cookie('jwt', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Only use secure in production
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-site in prod, 'lax' for local dev
+        secure: true, // in production
+        sameSite: 'none', // in production
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
       });
 
