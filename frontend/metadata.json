@@ -1,0 +1,6 @@
+{
+  "name": "Personalized Learning Path Generator",
+  "description": "An application that uses the Gemini API to generate personalized learning paths. Features a landing page, simulated user authentication, and allows users to create, save (in-memory), and manage multiple learning paths with curated free resources.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
