@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import UserMetricsPage from './components/UserMetricsPage';
 import { generateLearningPath as fetchLearningPathFromAPI } from './services/geminiService';
 import { LoadingSpinner } from './components/LoadingSpinner';
+import { PathGenerationLoader } from './components/PathGenerationLoader';
 import { Navbar } from './components/Navbar';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage'; 
@@ -19,6 +20,7 @@ const App: React.FC = () => {
   const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
   const [currentPath, setCurrentPath] = useState<LearningPath | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isGeneratingPath, setIsGeneratingPath] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -154,7 +156,7 @@ const App: React.FC = () => {
 
   const handleCreatePath = async (request: LearningPathCreationRequest) => {
     if (!isAuthenticated) { navigateTo('login'); return; }
-    setIsLoading(true);
+    setIsGeneratingPath(true);
     setError(null);
     setCurrentPath(null);
     try {
@@ -171,7 +173,7 @@ const App: React.FC = () => {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Failed to generate learning path. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsGeneratingPath(false);
     }
   };
 
@@ -376,6 +378,7 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    // Show general loading (for auth, etc.)
     if (isLoading) { 
       return <div className="flex justify-center items-center h-64"><LoadingSpinner /></div>;
     }
@@ -407,7 +410,11 @@ const App: React.FC = () => {
           />
         );
       case 'create':
-        return <LearningPathForm onSubmit={handleCreatePath} />;
+        // Show path generation loading when generating a path
+        if (isGeneratingPath) {
+          return <PathGenerationLoader />;
+        }
+        return <LearningPathForm onSubmit={handleCreatePath} isGenerating={isGeneratingPath} />;
       case 'viewing':
         if (currentPath) {
           const isSaved = learningPaths.some(p => p.id === currentPath.id);
